@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from easy_tpp.model.torch_model.torch_baselayer import EncoderLayer, MultiHeadAttention, \
-    TimeShiftedPositionalEncoding
+    TimeShiftedPositionalEncoding, ScaledSoftplus
 from easy_tpp.model.torch_model.torch_basemodel import TorchBaseModel
 
 
@@ -36,7 +36,7 @@ class SAHP(TorchBaseModel):
 
         # convert hidden vectors into a scalar
         self.layer_intensity_hidden = nn.Linear(self.d_model, self.num_event_types)
-        self.softplus = nn.Softplus()
+        self.softplus = ScaledSoftplus(self.num_event_types)  # learnable mark-specific beta
 
         self.stack_layers = nn.ModuleList(
             [EncoderLayer(
@@ -51,35 +51,38 @@ class SAHP(TorchBaseModel):
         if self.use_norm:
             self.norm = nn.LayerNorm(self.d_model)
 
-        # Equation (12): mu
-        self.mu = torch.empty([self.d_model, self.num_event_types], device=self.device)
-        # Equation (13): eta
-        self.eta = torch.empty([self.d_model, self.num_event_types], device=self.device)
-        # Equation (14): gamma
-        self.gamma = torch.empty([self.d_model, self.num_event_types], device=self.device)
+        # Equation (12): mu = GELU(h*W_mu)
+        self.mu = nn.Sequential(
+            nn.Linear(self.d_model, self.num_event_types, bias=False),
+            nn.GELU(),
+        )
 
-        nn.init.xavier_normal_(self.mu)
-        nn.init.xavier_normal_(self.eta)
-        nn.init.xavier_normal_(self.gamma)
+        # Equation (13): eta = GELU(h*W_eta)
+        self.eta = nn.Sequential(
+            nn.Linear(self.d_model, self.num_event_types, bias=False),
+            nn.GELU(),
+        )
 
-    def state_decay(self, encode_state, mu, eta, gamma, duration_t):
+        # Equation (14): gamma = Softplus(h*W_gamma)
+        self.gamma = nn.Sequential(
+            nn.Linear(self.d_model, self.num_event_types, bias=False),
+            nn.Softplus(),
+        )
+
+    def state_decay(self, encode_state, duration_t):
         """Equation (15), which computes the pre-intensity states
 
         Args:
             encode_state (tensor): [batch_size, seq_len, hidden_size].
-            mu (tensor): [batch_size, seq_len, hidden_size].
-            eta (tensor): [batch_size, seq_len, hidden_size].
-            gamma (tensor): [batch_size, seq_len, hidden_size].
             duration_t (tensor): [batch_size, seq_len, num_sample].
 
         Returns:
             tensor: hidden states at event times.
         """
+        mu, eta, gamma = self.mu(encode_state), self.eta(encode_state), self.gamma(encode_state)
 
         # [batch_size, hidden_dim]
-        states = torch.matmul(encode_state, mu) + (
-                torch.matmul(encode_state, eta) - torch.matmul(encode_state, mu)) * torch.exp(
-            -torch.matmul(encode_state, gamma) * duration_t)
+        states = mu + (eta - mu) * torch.exp(-gamma * duration_t)
         return states
 
     def forward(self, time_seqs, time_delta_seqs, event_seqs, attention_mask):
@@ -109,7 +112,7 @@ class SAHP(TorchBaseModel):
         return enc_output
 
     def loglike_loss(self, batch):
-        """Compute the loglike loss.
+        """Compute the log-likelihood loss.
 
         Args:
             batch (tuple, list): batch input.
@@ -117,14 +120,11 @@ class SAHP(TorchBaseModel):
         Returns:
             list: loglike loss, num events.
         """
-        time_seqs, time_delta_seqs, type_seqs, batch_non_pad_mask, attention_mask, type_mask = batch
+        time_seqs, time_delta_seqs, type_seqs, batch_non_pad_mask, attention_mask = batch
 
-        enc_out = self.forward(time_seqs[:, :-1], time_delta_seqs[:, 1:], type_seqs[:, :-1], attention_mask[:, 1:, :-1])
+        enc_out = self.forward(time_seqs[:, :-1], time_delta_seqs[:, :-1], type_seqs[:, :-1], attention_mask[:, :-1, :-1])
 
         cell_t = self.state_decay(encode_state=enc_out,
-                                  mu=self.mu[None, ...],
-                                  eta=self.eta[None, ...],
-                                  gamma=self.gamma[None, ...],
                                   duration_t=time_delta_seqs[:, 1:, None])
 
         # [batch_size, seq_len, num_event_types]
@@ -145,11 +145,10 @@ class SAHP(TorchBaseModel):
                                                                         lambdas_loss_samples=lambda_t_sample,
                                                                         time_delta_seq=time_delta_seqs[:, 1:],
                                                                         seq_mask=batch_non_pad_mask[:, 1:],
-                                                                        lambda_type_mask=type_mask[:, 1:])
+                                                                        type_seq=type_seqs[:, 1:])
 
-        # return enc_inten to compute accuracy
+        # compute loss to minimize
         loss = - (event_ll - non_event_ll).sum()
-
         return loss, num_events
 
     def compute_states_at_sample_times(self,
@@ -166,9 +165,6 @@ class SAHP(TorchBaseModel):
         """
 
         cell_states = self.state_decay(encode_state[:, :, None, :],
-                                       self.mu[None, None, ...],
-                                       self.eta[None, None, ...],
-                                       self.gamma[None, None, ...],
                                        sample_dtimes[:, :, :, None])
 
         return cell_states
