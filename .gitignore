@@ -25,3 +25,9 @@ log
 .idea
 
 examples/checkpoints/*
+checkpoints/*
+data/*
+configs/*
+
+test.ipynb
+main.py

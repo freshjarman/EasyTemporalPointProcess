@@ -7,14 +7,15 @@ from easy_tpp.utils import RunnerPhase, set_optimizer, set_device
 
 
 class TorchModelWrapper:
+
     def __init__(self, model, base_config, model_config, trainer_config):
         """A wrapper class for Torch backends.
 
         Args:
             model (BaseModel): a TPP model.
             base_config (EasyTPP.Config): basic configs.
-            model_config (EasyTPP.ModelConfig): model spec configs.
-            trainer_config (EasyTPP.TrainerConfig): trainer spec configs.
+            model_config (EasyTPP.ModelConfig): model specs configs.
+            trainer_config (EasyTPP.TrainerConfig): trainer specs configs.
         """
         self.model = model
         self.base_config = base_config
@@ -30,14 +31,17 @@ class TorchModelWrapper:
             # set up optimizer
             optimizer = self.trainer_config.optimizer
             self.learning_rate = self.trainer_config.learning_rate
-            self.opt = set_optimizer(optimizer, self.model.parameters(), self.learning_rate)
+            self.opt = set_optimizer(optimizer, self.model.parameters(),
+                                     self.learning_rate)
 
         # set up tensorboard
         self.use_tfb = self.trainer_config.use_tfb
         self.train_summary_writer, self.valid_summary_writer = None, None
         if self.use_tfb:
-            self.train_summary_writer = SummaryWriter(log_dir=self.base_config.spec['tfb_train_dir'])
-            self.valid_summary_writer = SummaryWriter(log_dir=self.base_config.spec['tfb_valid_dir'])
+            self.train_summary_writer = SummaryWriter(
+                log_dir=self.base_config.specs['tfb_train_dir'])
+            self.valid_summary_writer = SummaryWriter(
+                log_dir=self.base_config.specs['tfb_valid_dir'])
 
     def restore(self, ckpt_dir):
         """Load the checkpoint to restore the model.
@@ -126,16 +130,21 @@ class TorchModelWrapper:
             else:  # by default we do not do evaluation on train set which may take a long time
                 if self.model.event_sampler:
                     if batch[1] is not None and batch[2] is not None:
-                        label_dtime, label_type = batch[1][:, 1:].cpu().numpy(), batch[2][:, 1:].cpu().numpy()
+                        label_dtime, label_type = batch[1][:, 1:].cpu().numpy(
+                        ), batch[2][:, 1:].cpu().numpy()
                     if batch[3] is not None:
                         mask = batch[3][:, 1:].cpu().numpy()
-                    pred_dtime, pred_type = self.model.predict_one_step_at_every_event(batch=batch)
+                    pred_dtime, pred_type = self.model.predict_one_step_at_every_event(
+                        batch=batch)
                     pred_dtime = pred_dtime.detach().cpu().numpy()
                     pred_type = pred_type.detach().cpu().numpy()
 
-            return loss.item(), num_event, (pred_dtime, pred_type), (label_dtime, label_type), (mask,)
+            return loss.item(), num_event, (pred_dtime,
+                                            pred_type), (label_dtime,
+                                                         label_type), (mask, )
         else:
-            pred_dtime, pred_type, label_dtime, label_type = self.model.predict_multi_step_since_last_event(batch=batch)
+            pred_dtime, pred_type, label_dtime, label_type = self.model.predict_multi_step_since_last_event(
+                batch=batch)
             pred_dtime = pred_dtime.detach().cpu().numpy()
             pred_type = pred_type.detach().cpu().numpy()
             label_dtime = label_dtime.detach().cpu().numpy()

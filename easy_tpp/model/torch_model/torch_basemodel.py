@@ -8,6 +8,7 @@ from easy_tpp.utils import set_device
 
 
 class TorchBaseModel(nn.Module):
+
     def __init__(self, model_config):
         """Initialize the BaseModel
 
@@ -22,9 +23,10 @@ class TorchBaseModel(nn.Module):
         self.pad_token_id = model_config.pad_token_id
         self.eps = torch.finfo(torch.float32).eps
 
-        self.layer_type_emb = nn.Embedding(self.num_event_types_pad,  # have padding
-                                           self.hidden_size,
-                                           padding_idx=self.pad_token_id)
+        self.layer_type_emb = nn.Embedding(
+            self.num_event_types_pad,  # have padding
+            self.hidden_size,
+            padding_idx=self.pad_token_id)
 
         self.gen_config = model_config.thinning
         self.event_sampler = None
@@ -33,13 +35,14 @@ class TorchBaseModel(nn.Module):
         self.to(self.device)
 
         if self.gen_config:
-            self.event_sampler = EventSampler(num_sample=self.gen_config.num_sample,
-                                              num_exp=self.gen_config.num_exp,
-                                              over_sample_rate=self.gen_config.over_sample_rate,
-                                              patience_counter=self.gen_config.patience_counter,
-                                              num_samples_boundary=self.gen_config.num_samples_boundary,
-                                              dtime_max=self.gen_config.dtime_max,
-                                              device=self.device)
+            self.event_sampler = EventSampler(
+                num_sample=self.gen_config.num_sample,
+                num_exp=self.gen_config.num_exp,
+                over_sample_rate=self.gen_config.over_sample_rate,
+                patience_counter=self.gen_config.patience_counter,
+                num_samples_boundary=self.gen_config.num_samples_boundary,
+                dtime_max=self.gen_config.dtime_max,
+                device=self.device)
 
     @staticmethod
     def generate_model_from_config(model_config):
@@ -78,10 +81,12 @@ class TorchBaseModel(nn.Module):
         # [batch_size, 1, hidden_dim]
         select_index = select_index.unsqueeze(1)
         # [batch_size, hidden_dim]
-        last_logits = torch.gather(logits, dim=1, index=select_index).squeeze(1)
+        last_logits = torch.gather(logits, dim=1,
+                                   index=select_index).squeeze(1)
         return last_logits
 
-    def compute_loglikelihood(self, time_delta_seq, lambda_at_event, lambdas_loss_samples, seq_mask,
+    def compute_loglikelihood(self, time_delta_seq, lambda_at_event,
+                              lambdas_loss_samples, seq_mask,
                               lambda_type_mask):
         """Compute the loglikelihood of the event sequence based on Equation (8) of NHP paper.
 
@@ -101,7 +106,8 @@ class TorchBaseModel(nn.Module):
 
         # Sum of lambda over every type and every event point
         # [batch_size, seq_len]
-        event_lambdas = torch.sum(lambda_at_event * lambda_type_mask, dim=-1) + self.eps
+        event_lambdas = torch.sum(lambda_at_event * lambda_type_mask,
+                                  dim=-1) + self.eps
 
         # mask the pad event
         event_lambdas = event_lambdas.masked_fill_(~seq_mask, 1.0)
@@ -120,7 +126,8 @@ class TorchBaseModel(nn.Module):
 
         # interval_integral - [batch_size, seq_len]
         # interval_integral = length_interval * average of sampled lambda(t)
-        non_event_ll = lambdas_total_samples.mean(dim=-1) * time_delta_seq * seq_mask
+        non_event_ll = lambdas_total_samples.mean(
+            dim=-1) * time_delta_seq * seq_mask
 
         num_events = torch.masked_select(event_ll, event_ll.ne(0.0)).size()[0]
 
@@ -136,10 +143,11 @@ class TorchBaseModel(nn.Module):
             tensor: [batch_size, seq_len, n_samples]
         """
         # [1, 1, n_samples]
-        dtimes_ratio_sampled = torch.linspace(start=0.0,
-                                              end=1.0,
-                                              steps=self.loss_integral_num_sample_per_step,
-                                              device=self.device)[None, None, :]
+        dtimes_ratio_sampled = torch.linspace(
+            start=0.0,
+            end=1.0,
+            steps=self.loss_integral_num_sample_per_step,
+            device=self.device)[None, None, :]
 
         # [batch_size, max_len, n_samples]
         sampled_dtimes = time_delta_seq[:, :, None] * dtimes_ratio_sampled
@@ -147,7 +155,8 @@ class TorchBaseModel(nn.Module):
         return sampled_dtimes
 
     def compute_states_at_sample_times(self, **kwargs):
-        raise NotImplementedError('This need to implemented in inherited class ! ')
+        raise NotImplementedError(
+            'This need to implemented in inherited class ! ')
 
     def predict_one_step_at_every_event(self, batch):
         """One-step prediction for every event in the sequence.
@@ -164,27 +173,29 @@ class TorchBaseModel(nn.Module):
 
         # remove the last event, as the prediction based on the last event has no label
         # time_delta_seq should start from 1, because the first one is zero
-        time_seq, time_delta_seq, event_seq = time_seq[:, :-1], time_delta_seq[:, 1:], event_seq[:, :-1]
+        time_seq, time_delta_seq, event_seq = time_seq[:, :
+                                                       -1], time_delta_seq[:,
+                                                                           1:], event_seq[:, :
+                                                                                          -1]
 
         # [batch_size, seq_len]
         dtime_boundary = time_delta_seq + self.event_sampler.dtime_max
 
         # [batch_size, seq_len, num_sample]
-        accepted_dtimes, weights = self.event_sampler.draw_next_time_one_step(time_seq,
-                                                                              time_delta_seq,
-                                                                              event_seq,
-                                                                              dtime_boundary,
-                                                                              self.compute_intensities_at_sample_times)
+        accepted_dtimes, weights = self.event_sampler.draw_next_time_one_step(
+            time_seq, time_delta_seq, event_seq, dtime_boundary,
+            self.compute_intensities_at_sample_times)
 
         # [batch_size, seq_len]
         dtimes_pred = torch.sum(accepted_dtimes * weights, dim=-1)
 
         # [batch_size, seq_len, 1, event_num]
-        intensities_at_times = self.compute_intensities_at_sample_times(time_seq,
-                                                                        time_delta_seq,
-                                                                        event_seq,
-                                                                        dtimes_pred[:, :, None],
-                                                                        max_steps=event_seq.size()[1])
+        intensities_at_times = self.compute_intensities_at_sample_times(
+            time_seq,
+            time_delta_seq,
+            event_seq,
+            dtimes_pred[:, :, None],
+            max_steps=event_seq.size()[1])
 
         # [batch_size, seq_len, event_num]
         intensities_at_times = intensities_at_times.squeeze(dim=-2)
@@ -233,11 +244,12 @@ class TorchBaseModel(nn.Module):
             dtimes_pred = torch.sum(accepted_dtimes * weights, dim=-1)
 
             # [batch_size, seq_len, 1, event_num]
-            intensities_at_times = self.compute_intensities_at_sample_times(time_seq,
-                                                                            time_delta_seq,
-                                                                            event_seq,
-                                                                            dtimes_pred[:, :, None],
-                                                                            max_steps=event_seq.size()[1])
+            intensities_at_times = self.compute_intensities_at_sample_times(
+                time_seq,
+                time_delta_seq,
+                event_seq,
+                dtimes_pred[:, :, None],
+                max_steps=event_seq.size()[1])
 
             # [batch_size, seq_len, event_num]
             intensities_at_times = intensities_at_times.squeeze(dim=-2)
