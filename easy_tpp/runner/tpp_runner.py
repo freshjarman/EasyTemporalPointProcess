@@ -11,7 +11,8 @@ class TPPRunner(Runner):
     """
 
     def __init__(self, runner_config, unique_model_dir=False, **kwargs):
-        super(TPPRunner, self).__init__(runner_config, unique_model_dir, **kwargs)
+        super(TPPRunner, self).__init__(runner_config, unique_model_dir,
+                                        **kwargs)
 
         self.metrics_tracker = MetricsTracker()
         if self.runner_config.trainer_config.metrics is not None:
@@ -35,11 +36,12 @@ class TPPRunner(Runner):
             from easy_tpp.utils import count_model_params
             set_seed(self.runner_config.trainer_config.seed)
 
-            self.model = TorchBaseModel.generate_model_from_config(model_config=self.runner_config.model_config)
-            self.model_wrapper = TorchModelWrapper(self.model,
-                                                   self.runner_config.base_config,
-                                                   self.runner_config.model_config,
-                                                   self.runner_config.trainer_config)
+            self.model = TorchBaseModel.generate_model_from_config(
+                model_config=self.runner_config.model_config)
+            self.model_wrapper = TorchModelWrapper(
+                self.model, self.runner_config.base_config,
+                self.runner_config.model_config,
+                self.runner_config.trainer_config)
             num_params = count_model_params(self.model)
 
         else:
@@ -49,11 +51,12 @@ class TPPRunner(Runner):
             from easy_tpp.utils.tf_utils import count_model_params
             set_seed(self.runner_config.trainer_config.seed)
 
-            self.model = TfBaseModel.generate_model_from_config(model_config=self.runner_config.model_config)
-            self.model_wrapper = TfModelWrapper(self.model,
-                                                self.runner_config.base_config,
-                                                self.runner_config.model_config,
-                                                self.runner_config.trainer_config)
+            self.model = TfBaseModel.generate_model_from_config(
+                model_config=self.runner_config.model_config)
+            self.model_wrapper = TfModelWrapper(
+                self.model, self.runner_config.base_config,
+                self.runner_config.model_config,
+                self.runner_config.trainer_config)
             num_params = count_model_params()
 
         info_msg = f'Num of model parameters {num_params}'
@@ -92,33 +95,43 @@ class TPPRunner(Runner):
         for i in range(self.runner_config.trainer_config.max_epoch):
             train_metrics = self.run_one_epoch(train_loader, RunnerPhase.TRAIN)
 
-            message = f"[ Epoch {i} (train) ]: train " + MetricsHelper.metrics_dict_to_str(train_metrics)
+            message = f"[ Epoch {i} (train) ]: train " + MetricsHelper.metrics_dict_to_str(
+                train_metrics)
             logger.info(message)
 
-            self.model_wrapper.write_summary(i, train_metrics, RunnerPhase.TRAIN)
+            self.model_wrapper.write_summary(i, train_metrics,
+                                             RunnerPhase.TRAIN)
 
             # evaluate model
             if i % self.runner_config.trainer_config.valid_freq == 0:
-                valid_metrics = self.run_one_epoch(valid_loader, RunnerPhase.VALIDATE)
+                valid_metrics = self.run_one_epoch(valid_loader,
+                                                   RunnerPhase.VALIDATE)
 
-                self.model_wrapper.write_summary(i, valid_metrics, RunnerPhase.VALIDATE)
+                self.model_wrapper.write_summary(i, valid_metrics,
+                                                 RunnerPhase.VALIDATE)
 
-                message = f"[ Epoch {i} (valid) ]:  valid " + MetricsHelper.metrics_dict_to_str(valid_metrics)
+                message = f"[ Epoch {i} (valid) ]:  valid " + MetricsHelper.metrics_dict_to_str(
+                    valid_metrics)
                 logger.info(message)
 
-                updated = self.metrics_tracker.update_best("loglike", valid_metrics['loglike'], i)
+                updated = self.metrics_tracker.update_best(
+                    "loglike", valid_metrics['loglike'], i)
 
                 message_valid = "current best loglike on valid set is {:.4f} (updated at epoch-{})".format(
-                    self.metrics_tracker.current_best['loglike'], self.metrics_tracker.episode_best)
+                    self.metrics_tracker.current_best['loglike'],
+                    self.metrics_tracker.episode_best)
 
                 if updated:
                     message_valid += f", best updated at this epoch"
-                    self.model_wrapper.save(self.runner_config.base_config.specs['saved_model_dir'])
+                    self.model_wrapper.save(self.runner_config.base_config.
+                                            specs['saved_model_dir'])
 
                 if test_loader is not None:
-                    test_metrics = self.run_one_epoch(test_loader, RunnerPhase.VALIDATE)
+                    test_metrics = self.run_one_epoch(test_loader,
+                                                      RunnerPhase.VALIDATE)
 
-                    message = f"[ Epoch {i} (test) ]: test " + MetricsHelper.metrics_dict_to_str(test_metrics)
+                    message = f"[ Epoch {i} (test) ]: test " + MetricsHelper.metrics_dict_to_str(
+                        test_metrics)
                     logger.info(message)
 
                 logger.critical(message_valid)
@@ -143,7 +156,8 @@ class TPPRunner(Runner):
 
         self.model_wrapper.close_summary()
 
-        message = f"Evaluation result: " + MetricsHelper.metrics_dict_to_str(eval_metrics)
+        message = f"Evaluation result: " + MetricsHelper.metrics_dict_to_str(
+            eval_metrics)
 
         logger.critical(message)
 
@@ -195,11 +209,15 @@ class TPPRunner(Runner):
 
             avg_loss = total_loss / total_num_event
 
-            metrics_dict.update({'loglike': -avg_loss, 'num_events': total_num_event})
+            metrics_dict.update({
+                'loglike': -avg_loss,
+                'num_events': total_num_event
+            })
 
         else:
             for batch in data_loader:
-                batch_pred, batch_label = self.model_wrapper.run_batch(batch, phase=phase)
+                batch_pred, batch_label = self.model_wrapper.run_batch(
+                    batch, phase=phase)
                 epoch_pred.append(batch_pred)
                 epoch_label.append(batch_label)
 
@@ -213,11 +231,16 @@ class TPPRunner(Runner):
             epoch_label = concat_element(epoch_label, pad_index)
             label_exists = True
             if len(epoch_mask):
-                epoch_mask = concat_element(epoch_mask, False)[0]  # retrieve the first element of concat array
+                epoch_mask = concat_element(
+                    epoch_mask, False
+                )[0]  # retrieve the first element of concat array, [bsz, seq_len-1]
                 epoch_mask = epoch_mask.astype(bool)
 
         if pred_exists and label_exists:
-            metrics_dict.update(self.metric_functions(epoch_pred, epoch_label, seq_mask=epoch_mask))
+            metrics_dict.update(
+                self.metric_functions(epoch_pred,
+                                      epoch_label,
+                                      seq_mask=epoch_mask))
 
         if phase == RunnerPhase.PREDICT:
             metrics_dict.update({'pred': epoch_pred, 'label': epoch_label})

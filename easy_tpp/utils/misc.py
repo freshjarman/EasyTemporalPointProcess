@@ -55,9 +55,8 @@ def save_yaml_config(save_dir, config):
     from collections import OrderedDict
     # add yaml representer for different type
     yaml.add_representer(
-        OrderedDict,
-        lambda dumper, data: dumper.represent_mapping('tag:yaml.org,2002:map', data.items())
-    )
+        OrderedDict, lambda dumper, data: dumper.represent_mapping(
+            'tag:yaml.org,2002:map', data.items()))
 
     if prt_dir != '' and not os.path.exists(prt_dir):
         os.makedirs(prt_dir)
@@ -178,7 +177,7 @@ def array_pad_cols(arr, max_num_cols, pad_index):
 def concat_element(arrs, pad_index):
     """ Concat element from each batch output  """
 
-    n_lens = len(arrs)
+    n_lens = len(arrs)  # num of batches
     n_elements = len(arrs[0])
 
     # found out the max seq len (num cols) in output arrays
@@ -188,7 +187,9 @@ def concat_element(arrs, pad_index):
     for j in range(n_elements):
         a_output = []
         for i in range(n_lens):
-            arrs_ = array_pad_cols(arrs[i][j], max_num_cols=max_len, pad_index=pad_index)
+            arrs_ = array_pad_cols(arrs[i][j],
+                                   max_num_cols=max_len,
+                                   pad_index=pad_index)
             a_output.append(arrs_)
 
         concated_outputs.append(np.concatenate(a_output, axis=0))
@@ -210,7 +211,8 @@ def to_dict(obj, classkey=None):
     elif hasattr(obj, "__dict__"):
         data = dict([(key, to_dict(value, classkey))
                      for key, value in obj.__dict__.iteritems()
-                     if not callable(value) and not key.startswith('_') and key not in ['name']])
+                     if not callable(value) and not key.startswith('_')
+                     and key not in ['name']])
         if classkey is not None and hasattr(obj, "__class__"):
             data[classkey] = obj.__class__.__name__
         return data
@@ -244,8 +246,11 @@ def dict_deep_update(target, source, is_add_new_key=True):
             continue
         # both target and source have the same key
         base_type_list = [int, float, str, tuple, bool]
-        if type(result[key]) in base_type_list or type(source[key]) in base_type_list:
+        if type(result[key]) in base_type_list or type(
+                source[key]) in base_type_list:
             result[key] = value
         else:
-            result[key] = dict_deep_update(result[key], source[key], is_add_new_key=is_add_new_key)
+            result[key] = dict_deep_update(result[key],
+                                           source[key],
+                                           is_add_new_key=is_add_new_key)
     return result

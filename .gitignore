@@ -31,3 +31,4 @@ configs/*
 
 test.ipynb
 main.py
+pred.pkl
