@@ -21,7 +21,7 @@ NHP_train:
     model_id: NHP # model name
     base_dir: './checkpoints/'
   trainer_config:
-    batch_size: 256
+    batch_size: 64  # before was 256
     max_epoch: 20
     shuffle: False
     optimizer: adam
@@ -119,7 +119,7 @@ THP_train:
   base_config:
     stage: train
     backend: torch
-    dataset_id: taxi
+    dataset_id: retweet
     runner_id: std_tpp
     model_id: THP # model name
     base_dir: './checkpoints/'

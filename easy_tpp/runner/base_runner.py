@@ -9,11 +9,7 @@ class Runner(Registrable):
     """Registrable Base Runner class.
     """
 
-    def __init__(
-            self,
-            runner_config,
-            unique_model_dir=False,
-            **kwargs):
+    def __init__(self, runner_config, unique_model_dir=False, **kwargs):
         """Initialize the base runner.
 
         Args:
@@ -23,7 +19,8 @@ class Runner(Registrable):
         self.runner_config = runner_config
         # re-assign the model_dir
         if unique_model_dir:
-            runner_config.model_dir = runner_config.base_config.specs['saved_model_dir'] + '_' + get_unique_id()
+            runner_config.model_dir = runner_config.base_config.specs[
+                'saved_model_dir'] + '_' + get_unique_id()
 
         self.save_log()
 
@@ -33,17 +30,17 @@ class Runner(Registrable):
             data_config = self.runner_config.data_config
             backend = self.runner_config.base_config.backend
             kwargs = self.runner_config.trainer_config.get_yaml_config()
-            self._data_loader = TPPDataLoader(
-                data_config=data_config,
-                backend=backend,
-                **kwargs
-            )
+            self._data_loader = TPPDataLoader(data_config=data_config,
+                                              backend=backend,
+                                              **kwargs)
 
         # Needed for Intensity Free model
         mean_log_inter_time, std_log_inter_time, min_dt, max_dt = (
             self._data_loader.train_loader().dataset.get_dt_stats())
-        runner_config.model_config.set("mean_log_inter_time", mean_log_inter_time)
-        runner_config.model_config.set("std_log_inter_time", std_log_inter_time)
+        runner_config.model_config.set("mean_log_inter_time",
+                                       mean_log_inter_time)
+        runner_config.model_config.set("std_log_inter_time",
+                                       std_log_inter_time)
         self.timer = Timer()
 
     @staticmethod
@@ -58,7 +55,9 @@ class Runner(Registrable):
             Runner: the corresponding runner class.
         """
         runner_cls = Runner.by_name(runner_config.base_config.runner_id)
-        return runner_cls(runner_config, unique_model_dir=unique_model_dir, **kwargs)
+        return runner_cls(runner_config,
+                          unique_model_dir=unique_model_dir,
+                          **kwargs)
 
     def get_config(self):
         return self.runner_config
@@ -69,13 +68,11 @@ class Runner(Registrable):
     def get_model_dir(self):
         return self.runner_config.base_config.specs['saved_model_dir']
 
-    def train(
-            self,
-            train_loader=None,
-            valid_loader=None,
-            test_loader=None,
-            **kwargs
-    ):
+    def train(self,
+              train_loader=None,
+              valid_loader=None,
+              test_loader=None,
+              **kwargs):
         """Train the model.
 
         Args:
@@ -95,18 +92,17 @@ class Runner(Registrable):
         if test_loader is None and self.runner_config.data_config.test_dir is not None:
             test_loader = self._data_loader.test_loader()
 
-        logger.info(f'Data \'{self.runner_config.base_config.dataset_id}\' loaded...')
+        logger.info(
+            f'Data \'{self.runner_config.base_config.dataset_id}\' loaded...')
 
         timer = self.timer
         timer.start()
         model_id = self.runner_config.base_config.model_id
         logger.info(f'Start {model_id} training...')
-        model = self._train_model(
-            train_loader,
-            valid_loader,
-            test_loader=test_loader,
-            **kwargs
-        )
+        model = self._train_model(train_loader,
+                                  valid_loader,
+                                  test_loader=test_loader,
+                                  **kwargs)
         logger.info(f'End {model_id} train! Cost time: {timer.end()}')
         return model
 
@@ -114,17 +110,15 @@ class Runner(Registrable):
         if valid_loader is None:
             valid_loader = self._data_loader.valid_loader()
 
-        logger.info(f'Data \'{self.runner_config.base_config.dataset_id}\' loaded...')
+        logger.info(
+            f'Data \'{self.runner_config.base_config.dataset_id}\' loaded...')
 
         timer = self.timer
         timer.start()
         model_id = self.runner_config.base_config.model_id
         logger.info(f'Start {model_id} evaluation...')
 
-        metric = self._evaluate_model(
-            valid_loader,
-            **kwargs
-        )
+        metric = self._evaluate_model(valid_loader, **kwargs)
         logger.info(f'End {model_id} evaluation! Cost time: {timer.end()}')
         return metric['rmse']  # return a list of scalr for HPO to use
 
@@ -132,17 +126,15 @@ class Runner(Registrable):
         if gen_loader is None:
             gen_loader = self._data_loader.test_loader()
 
-        logger.info(f'Data \'{self.runner_config.base_config.dataset_id}\' loaded...')
+        logger.info(
+            f'Data \'{self.runner_config.base_config.dataset_id}\' loaded...')
 
         timer = self.timer
         timer.start()
         model_name = self.runner_config.base_config.model_id
         logger.info(f'Start {model_name} evaluation...')
 
-        model = self._gen_model(
-            gen_loader,
-            **kwargs
-        )
+        model = self._gen_model(gen_loader, **kwargs)
         logger.info(f'End {model_name} generation! Cost time: {timer.end()}')
         return model
 
@@ -176,11 +168,7 @@ class Runner(Registrable):
         logger.info(f'Save the log to {log_dir}')
         return
 
-    def save(
-            self,
-            model_dir=None,
-            **kwargs
-    ):
+    def save(self, model_dir=None, **kwargs):
         return self._save_model(model_dir, **kwargs)
 
     def run(self, **kwargs):

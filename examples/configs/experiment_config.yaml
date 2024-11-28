@@ -134,7 +134,7 @@ NHP_eval:
     use_ln: False
     seed: 2019
     gpu: 0
-    pretrained_model_dir: ./checkpoints/26507_4380788096_231111-101848/models/saved_model
+    pretrained_model_dir: ./checkpoints/14036_13804_241021-115827/models/saved_model 
     thinning:
       num_seq: 10
       num_sample: 1
@@ -167,7 +167,7 @@ NHP_gen:
   model_config:
     hidden_size: 64
     loss_integral_num_sample_per_step: 20
-    pretrained_model_dir: ./checkpoints/75518_4377527680_230530-132355/models/saved_model
+    pretrained_model_dir: ./checkpoints/14036_13804_241021-115827/models/saved_model
     thinning:
       num_seq: 10
       num_sample: 1

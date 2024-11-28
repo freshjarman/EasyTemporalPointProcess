@@ -7,15 +7,23 @@ from easy_tpp.runner import Runner
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--config_dir', type=str, required=False, default='retweet_config.yaml',
-                        help='Dir of configuration yaml to train and evaluate the model.')
+    parser.add_argument(
+        '--config_dir',
+        type=str,
+        required=False,
+        default='./examples/train_experiment/retweet_config.yaml',
+        help='Dir of configuration yaml to train and evaluate the model.')
 
-    parser.add_argument('--experiment_id', type=str, required=False, default='NHP_train',
+    parser.add_argument('--experiment_id',
+                        type=str,
+                        required=False,
+                        default='NHP_train',
                         help='Experiment id in the config file.')
 
     args = parser.parse_args()
 
-    config = Config.build_from_yaml_file(args.config_dir, experiment_id=args.experiment_id)
+    config = Config.build_from_yaml_file(args.config_dir,
+                                         experiment_id=args.experiment_id)
 
     model_runner = Runner.build_from_config(config)
 
