@@ -27,3 +27,15 @@ log
 examples/checkpoints/*
 
 notebooks/checkpoints/*
+# AI Context
+.cobridge
+
+# .traerules
+.traerules
+
+# .cursorrules
+.cursorrules
+
+# GitHub Copilot Instructions
+.github/copilot-instructions.md
+docs/IFTPP_Technical_Documentation.md
