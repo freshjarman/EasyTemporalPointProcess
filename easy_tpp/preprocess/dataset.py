@@ -44,6 +44,10 @@ class TPPDataset(Dataset):
                      'type_seqs': self.type_seqs[idx]})
 
     def get_dt_stats(self):
+        # Statistics are computed in log-space to match the original IFL-TPP
+        # implementation (Shchur et al., ICLR 2020): the returned mean/std are
+        # mean(log dt) and std(log dt), used by IntensityFree's
+        # LogNormalMixtureDistribution to standardize the GMM base space.
         x_bar, s_2_x, n = 0., 0., 0
         min_dt, max_dt = np.inf, -np.inf
 
@@ -51,8 +55,9 @@ class TPPDataset(Dataset):
             dts = np.array(dts[1:-1 if marks[-1] == -1 else None])
             min_dt = min(min_dt, dts.min())
             max_dt = max(max_dt, dts.max())
-            y_bar = dts.mean()
-            s_2_y = dts.var()
+            log_dts = np.log(dts + 1e-8)
+            y_bar = log_dts.mean()
+            s_2_y = log_dts.var()
             m = dts.shape[0]
             n += m
             # Formula taken from https://math.stackexchange.com/questions/3604607/can-i-work-out-the-variance-in-batches

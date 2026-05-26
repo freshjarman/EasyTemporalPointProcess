@@ -126,10 +126,11 @@ class IntensityFree(TorchBaseModel):
 
         self.num_features = 1 + self.hidden_size
 
-        self.layer_rnn = nn.GRU(input_size=self.num_features,
-                                hidden_size=self.hidden_size,
-                                num_layers=1,  # used in original paper
-                                batch_first=True)
+        self.layer_rnn = nn.GRU(
+            input_size=self.num_features,
+            hidden_size=self.hidden_size,
+            num_layers=1,  # used in original paper
+            batch_first=True)
 
         self.mark_linear = nn.Linear(self.hidden_size, self.num_event_types_pad)
         self.linear = nn.Linear(self.hidden_size, 3 * self.num_mix_components)
@@ -145,8 +146,10 @@ class IntensityFree(TorchBaseModel):
             list: hidden states, [batch_size, seq_len, hidden_dim], states right before the event happens.
         """
         # [batch_size, seq_len, hidden_size]
-        # We dont normalize inter-event time here
+        # Standardize log(dt) using log-space statistics from the training set
+        # (matches the original IFL-TPP implementation, Shchur et al., ICLR 2020).
         temporal_seqs = torch.log(time_delta_seqs + self.eps).unsqueeze(-1)
+        temporal_seqs = (temporal_seqs - self.mean_log_inter_time) / self.std_log_inter_time
 
         # [batch_size, seq_len, hidden_size]
         type_emb = self.layer_type_emb(type_seqs)
@@ -176,18 +179,16 @@ class IntensityFree(TorchBaseModel):
         # [batch_size, seq_len, 3 * num_mix_components]
         raw_params = self.linear(context)
         locs = raw_params[..., :self.num_mix_components]
-        log_scales = raw_params[..., self.num_mix_components: (2 * self.num_mix_components)]
+        log_scales = raw_params[..., self.num_mix_components:(2 * self.num_mix_components)]
         log_weights = raw_params[..., (2 * self.num_mix_components):]
 
         log_scales = clamp_preserve_gradients(log_scales, -5.0, 3.0)
         log_weights = torch.log_softmax(log_weights, dim=-1)
-        inter_time_dist = LogNormalMixtureDistribution(
-            locs=locs,
-            log_scales=log_scales,
-            log_weights=log_weights,
-            mean_log_inter_time=self.mean_log_inter_time,
-            std_log_inter_time=self.std_log_inter_time
-        )
+        inter_time_dist = LogNormalMixtureDistribution(locs=locs,
+                                                       log_scales=log_scales,
+                                                       log_weights=log_weights,
+                                                       mean_log_inter_time=self.mean_log_inter_time,
+                                                       std_log_inter_time=self.std_log_inter_time)
 
         inter_times = time_delta_seqs[:, 1:].clamp(min=1e-5)
         # [batch_size, seq_len]
@@ -231,24 +232,23 @@ class IntensityFree(TorchBaseModel):
         # [batch_size, seq_len, 3 * num_mix_components]
         raw_params = self.linear(context)
         locs = raw_params[..., :self.num_mix_components]
-        log_scales = raw_params[..., self.num_mix_components: (2 * self.num_mix_components)]
+        log_scales = raw_params[..., self.num_mix_components:(2 * self.num_mix_components)]
         log_weights = raw_params[..., (2 * self.num_mix_components):]
 
         log_scales = clamp_preserve_gradients(log_scales, -5.0, 3.0)
         log_weights = torch.log_softmax(log_weights, dim=-1)
-        inter_time_dist = LogNormalMixtureDistribution(
-            locs=locs,
-            log_scales=log_scales,
-            log_weights=log_weights,
-            mean_log_inter_time=self.mean_log_inter_time,
-            std_log_inter_time=self.std_log_inter_time
-        )
+        inter_time_dist = LogNormalMixtureDistribution(locs=locs,
+                                                       log_scales=log_scales,
+                                                       log_weights=log_weights,
+                                                       mean_log_inter_time=self.mean_log_inter_time,
+                                                       std_log_inter_time=self.std_log_inter_time)
 
         # [num_samples, batch_size, seq_len]
-        accepted_dtimes = inter_time_dist.sample((self.event_sampler.num_sample,))
+        accepted_dtimes = inter_time_dist.sample((self.event_sampler.num_sample, ))
         dtimes_pred = accepted_dtimes.mean(dim=0)
 
         # [batch_size, seq_len, num_marks]
-        mark_logits = torch.log_softmax(self.mark_linear(context), dim=-1)  # Marks are modeled conditionally independently from times
+        mark_logits = torch.log_softmax(self.mark_linear(context),
+                                        dim=-1)  # Marks are modeled conditionally independently from times
         types_pred = torch.argmax(mark_logits, dim=-1)
         return dtimes_pred, types_pred

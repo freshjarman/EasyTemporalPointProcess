@@ -39,3 +39,6 @@ notebooks/checkpoints/*
 # GitHub Copilot Instructions
 .github/copilot-instructions.md
 docs/IFTPP_Technical_Documentation.md
+
+# wt's docs
+docs_wt/
